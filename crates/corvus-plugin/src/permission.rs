@@ -336,7 +336,7 @@ impl PermissionManager {
         let permissions = self
             .plugin_permissions
             .entry(plugin_name.to_string())
-            .or_insert_with(PermissionSet::new);
+            .or_default();
         permissions.grant(permission);
     }
 
@@ -345,7 +345,7 @@ impl PermissionManager {
         let permissions = self
             .plugin_permissions
             .entry(plugin_name.to_string())
-            .or_insert_with(PermissionSet::new);
+            .or_default();
         permissions.deny(permission);
     }
 
