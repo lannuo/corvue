@@ -8,6 +8,8 @@
 pub mod openai;
 pub mod ollama;
 pub mod error;
+#[cfg(test)]
+mod tests;
 
 pub use openai::{OpenAICompletionModel, OpenAIEmbeddingModel, OpenAIClient};
 pub use ollama::{
