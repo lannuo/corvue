@@ -670,7 +670,9 @@ name = "corvus-execution"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "corvus-core",
+ "serde",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
