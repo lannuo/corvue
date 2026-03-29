@@ -1,0 +1,25 @@
+[package]
+name = "corvus-telemetry"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Telemetry and observability for Corvus AI Agent"
+
+[dependencies]
+corvus-core = { path = "../corvus-core" }
+anyhow.workspace = true
+thiserror.workspace = true
+tracing = { workspace = true, features = ["attributes"] }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "json"] }
+opentelemetry = { workspace = true, features = ["trace", "metrics"] }
+opentelemetry-otlp = { workspace = true, features = ["trace", "metrics", "tonic"] }
+opentelemetry-semantic-conventions = { workspace = true }
+opentelemetry-sdk = { workspace = true }
+tokio.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+async-trait.workspace = true
+
+[dev-dependencies]

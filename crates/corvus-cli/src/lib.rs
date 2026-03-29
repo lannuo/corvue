@@ -4,9 +4,11 @@
 #![allow(missing_docs)] // Temporarily allow missing docs
 
 pub mod cache;
+pub mod circuit_breaker;
 pub mod cli;
 pub mod completer;
 pub mod config;
+pub mod config_loader;
 pub mod errors;
 pub mod format;
 pub mod mcp_bridge;
