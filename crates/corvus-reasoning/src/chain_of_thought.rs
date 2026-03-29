@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::fmt;
 
 /// Type of thought step
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,12 +80,6 @@ pub struct ChainOfThought {
     alternatives: Vec<AlternativePath>,
     /// Current active path ID (None = main path)
     active_path: Option<String>,
-    /// Maximum chain length
-    max_steps: usize,
-    /// Auto-verify each step
-    auto_verify: bool,
-    /// Exploration factor (0.0-1.0, higher = more alternatives)
-    exploration_factor: f32,
     /// Step history for rollback
     history: VecDeque<ThoughtStep>,
     /// Maximum history size
@@ -98,23 +93,17 @@ impl ChainOfThought {
             chain: Vec::new(),
             alternatives: Vec::new(),
             active_path: None,
-            max_steps: 50,
-            auto_verify: true,
-            exploration_factor: 0.3,
             history: VecDeque::new(),
             max_history: 20,
         }
     }
 
     /// Create with custom configuration
-    pub fn with_config(max_steps: usize, auto_verify: bool, exploration_factor: f32) -> Self {
+    pub fn with_config(_max_steps: usize, _auto_verify: bool, _exploration_factor: f32) -> Self {
         Self {
             chain: Vec::new(),
             alternatives: Vec::new(),
             active_path: None,
-            max_steps,
-            auto_verify,
-            exploration_factor: exploration_factor.clamp(0.0, 1.0),
             history: VecDeque::new(),
             max_history: 20,
         }
@@ -213,23 +202,6 @@ impl ChainOfThought {
             .iter()
             .filter(|s| s.step_type == step_type)
             .collect()
-    }
-
-    /// Get the entire chain as a formatted string
-    pub fn to_string(&self) -> String {
-        let mut result = String::new();
-
-        for (i, step) in self.chain.iter().enumerate() {
-            result.push_str(&format!(
-                "[{}] {:?} (conf: {:.2})\n{}\n\n",
-                i + 1,
-                step.step_type,
-                step.confidence,
-                step.content
-            ));
-        }
-
-        result
     }
 
     /// Rollback to a previous step
@@ -412,6 +384,22 @@ impl ChainOfThought {
     }
 }
 
+impl fmt::Display for ChainOfThought {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, step) in self.chain.iter().enumerate() {
+            writeln!(
+                f,
+                "[{}] {:?} (conf: {:.2})\n{}\n",
+                i + 1,
+                step.step_type,
+                step.confidence,
+                step.content
+            )?;
+        }
+        Ok(())
+    }
+}
+
 impl Default for ChainOfThought {
     fn default() -> Self {
         Self::new()
@@ -491,7 +479,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_string() {
+    fn test_display() {
         let mut cot = ChainOfThought::new();
         cot.observe("Test".to_string(), 0.9);
 

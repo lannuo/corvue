@@ -169,9 +169,9 @@ impl PermissionSet {
 
     /// Create a permission set with minimal (safe) permissions
     pub fn minimal() -> Self {
-        let set = Self::new();
+        
         // Minimal is empty - no permissions by default
-        set
+        Self::new()
     }
 
     /// Create a permission set with no restrictions (use with caution!)
@@ -413,6 +413,7 @@ impl Default for ResourceLimits {
 
 /// Network access control configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct NetworkConfig {
     /// Whether network access is allowed at all
     pub allow_network: bool,
@@ -424,16 +425,6 @@ pub struct NetworkConfig {
     pub allow_localhost: bool,
 }
 
-impl Default for NetworkConfig {
-    fn default() -> Self {
-        Self {
-            allow_network: false,
-            allowed_connections: Vec::new(),
-            blocked_connections: Vec::new(),
-            allow_localhost: false,
-        }
-    }
-}
 
 /// System call filter configuration (Linux only)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -528,8 +519,6 @@ pub struct SecurityManager {
     resource_limits: ResourceLimits,
     /// Network config
     network_config: NetworkConfig,
-    /// Syscall filter (Linux only)
-    syscall_filter: SyscallFilter,
     /// Audit log
     audit_log: Vec<AuditLogEntry>,
     /// Maximum audit log size
@@ -543,7 +532,6 @@ impl SecurityManager {
             permissions: PermissionSet::minimal(),
             resource_limits: ResourceLimits::default(),
             network_config: NetworkConfig::default(),
-            syscall_filter: SyscallFilter::default(),
             audit_log: Vec::new(),
             max_audit_log_size: 1000,
         }
@@ -555,7 +543,6 @@ impl SecurityManager {
             permissions,
             resource_limits: ResourceLimits::default(),
             network_config: NetworkConfig::default(),
-            syscall_filter: SyscallFilter::default(),
             audit_log: Vec::new(),
             max_audit_log_size: 1000,
         }

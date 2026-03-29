@@ -41,3 +41,11 @@ async-trait = "0.1"
 
 [dev-dependencies]
 tempfile = "3.10"
+corvus-reasoning = { path = "../corvus-reasoning" }
+corvus-memory = { path = "../corvus-memory" }
+corvus-execution = { path = "../corvus-execution" }
+corvus-core = { path = "../corvus-core" }
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"

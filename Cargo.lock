@@ -630,6 +630,7 @@ dependencies = [
  "corvus-plugin",
  "corvus-protocol",
  "corvus-providers",
+ "corvus-reasoning",
  "corvus-tools",
  "dirs 5.0.1",
  "futures",

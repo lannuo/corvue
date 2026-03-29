@@ -36,10 +36,6 @@ pub struct PluginInfo {
 pub struct PluginRegistry {
     /// Loaded plugins
     plugins: HashMap<String, LoadedPlugin>,
-    /// Plugin context
-    context: PluginContext,
-    /// Permission manager
-    permissions: PermissionManager,
 }
 
 /// A loaded plugin with additional state
@@ -53,13 +49,11 @@ struct LoadedPlugin {
 impl PluginRegistry {
     /// Create a new plugin registry
     pub fn new(
-        context: PluginContext,
-        permissions: PermissionManager,
+        _context: PluginContext,
+        _permissions: PermissionManager,
     ) -> Self {
         Self {
             plugins: HashMap::new(),
-            context,
-            permissions,
         }
     }
 

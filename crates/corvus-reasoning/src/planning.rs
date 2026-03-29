@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
+/// Type alias for task listeners
+type TaskListener = Box<dyn Fn(&Task) + Send + Sync>;
+
 /// Status of a task or plan
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskStatus {
@@ -107,16 +110,10 @@ pub struct ExecutionPlan {
 pub struct ExecutionMonitor {
     /// The plan being executed
     plan: ExecutionPlan,
-    /// Task execution order
-    execution_order: Vec<String>,
-    /// Current task index
-    current_index: usize,
     /// Task start times (for duration tracking)
     start_times: HashMap<String, Instant>,
     /// Event listeners
-    listeners: Vec<Box<dyn Fn(&Task) + Send + Sync>>,
-    /// Whether to allow parallel execution
-    allow_parallel: bool,
+    listeners: Vec<TaskListener>,
     /// Maximum retries per task
     max_retries: u32,
     /// Retry counts per task
@@ -339,11 +336,10 @@ impl Planner {
         rec_stack.insert(task_id.to_string());
 
         for dep in &plan.dependencies {
-            if dep.source == task_id {
-                if self.has_cycle_dfs(plan, &dep.target, visited, rec_stack) {
+            if dep.source == task_id
+                && self.has_cycle_dfs(plan, &dep.target, visited, rec_stack) {
                     return true;
                 }
-            }
         }
 
         rec_stack.remove(task_id);
@@ -411,14 +407,11 @@ impl Default for Planner {
 
 impl ExecutionMonitor {
     /// Create a new execution monitor for a plan
-    pub fn new(plan: ExecutionPlan, allow_parallel: bool, max_retries: u32) -> Self {
+    pub fn new(plan: ExecutionPlan, _allow_parallel: bool, max_retries: u32) -> Self {
         Self {
             plan,
-            execution_order: Vec::new(),
-            current_index: 0,
             start_times: HashMap::new(),
             listeners: Vec::new(),
-            allow_parallel,
             max_retries,
             retry_counts: HashMap::new(),
         }

@@ -124,8 +124,6 @@ pub struct AgentDream {
     dream_state: HashMap<String, f32>,
     /// Whether we're currently dreaming
     is_dreaming: bool,
-    /// Maximum simulation depth
-    max_simulation_depth: usize,
 }
 
 impl ExperienceReplay {
@@ -259,7 +257,7 @@ impl Policy {
     pub fn set_q(&mut self, state: &str, action: &str, value: f32) {
         self.q_values
             .entry(state.to_string())
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(action.to_string(), value);
     }
 
@@ -344,12 +342,11 @@ impl AgentDream {
             active_policy_id: None,
             dream_state: HashMap::new(),
             is_dreaming: false,
-            max_simulation_depth: 10,
         }
     }
 
     /// Create with custom configuration
-    pub fn with_config(replay_buffer_size: usize, max_simulation_depth: usize) -> Self {
+    pub fn with_config(replay_buffer_size: usize, _max_simulation_depth: usize) -> Self {
         Self {
             replay_buffer: ExperienceReplay::new(replay_buffer_size),
             hypotheses: HashMap::new(),
@@ -358,7 +355,6 @@ impl AgentDream {
             active_policy_id: None,
             dream_state: HashMap::new(),
             is_dreaming: false,
-            max_simulation_depth,
         }
     }
 
