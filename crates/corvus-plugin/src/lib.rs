@@ -11,8 +11,22 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub mod error;
+pub mod lifecycle;
+pub mod permission;
+#[cfg(feature = "wasm")]
+pub mod wasm;
 
 pub use error::{PluginError, PluginResult};
+pub use lifecycle::{
+    FilePluginLoader, PluginInfo, PluginLoader, PluginRegistry, PluginState,
+};
+pub use permission::{
+    CommandPattern, EnvironmentPermission, FileSystemPermission, HostPattern, HttpMethod,
+    MemoryPermission, NetworkPermission, PathPattern, Permission, PermissionCheck,
+    PermissionManager, PermissionSet, ProcessPermission, UrlPattern,
+};
+#[cfg(feature = "wasm")]
+pub use wasm::{WasmPlugin, WasmPluginConfig, WasmPluginManager, WasmPluginManifest, WasmPluginWrapper, WasmToolDefinition};
 
 /// Plugin metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]

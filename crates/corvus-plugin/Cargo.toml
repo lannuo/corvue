@@ -16,3 +16,12 @@ async-trait.workspace = true
 tokio.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+
+[features]
+default = []
+wasm = ["dep:wasmtime", "dep:wasmtime-wasi"]
+
+[dependencies]
+wasmtime = { workspace = true, optional = true }
+wasmtime-wasi = { workspace = true, optional = true }
