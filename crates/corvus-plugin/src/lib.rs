@@ -17,9 +17,7 @@ pub mod permission;
 pub mod wasm;
 
 pub use error::{PluginError, PluginResult};
-pub use lifecycle::{
-    FilePluginLoader, PluginInfo, PluginLoader, PluginRegistry, PluginState,
-};
+pub use lifecycle::{PluginInfo, PluginRegistry, PluginState};
 pub use permission::{
     CommandPattern, EnvironmentPermission, FileSystemPermission, HostPattern, HttpMethod,
     MemoryPermission, NetworkPermission, PathPattern, Permission, PermissionCheck,

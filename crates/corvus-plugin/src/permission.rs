@@ -115,13 +115,14 @@ impl PathPattern {
                 if glob == "*" {
                     return true;
                 }
+                let path_str = path.to_string_lossy().to_string();
                 if let Some(pattern) = glob.strip_suffix('*') {
-                    return path.to_string_lossy().starts_with(pattern);
+                    return path_str.starts_with(pattern);
                 }
                 if let Some(pattern) = glob.strip_prefix('*') {
-                    return path.to_string_lossy().ends_with(pattern);
+                    return path_str.ends_with(pattern);
                 }
-                path.to_string_lossy() == glob
+                path_str == glob.as_str()
             }
             PathPattern::Any => true,
         }
@@ -240,84 +241,7 @@ impl PermissionSet {
         if self.denied.contains(permission) {
             return false;
         }
-
-        // Check for exact match first
-        if self.permissions.contains(permission) {
-            return true;
-        }
-
-        // Check for wildcard matches
-        self.has_wildcard_permission(permission)
-    }
-
-    /// Check for wildcard permissions that match
-    fn has_wildcard_permission(&self, permission: &Permission) -> bool {
-        match permission {
-            Permission::FileSystem(fs_perm) => self.has_filesystem_permission(fs_perm),
-            Permission::Network(net_perm) => self.has_network_permission(net_perm),
-            Permission::Process(proc_perm) => self.has_process_permission(proc_perm),
-            Permission::Environment(env_perm) => self.has_environment_permission(env_perm),
-            _ => false,
-        }
-    }
-
-    /// Check filesystem permissions
-    fn has_filesystem_permission(&self, requested: &FileSystemPermission) -> bool {
-        for perm in &self.permissions {
-            if let Permission::FileSystem(granted) = perm {
-                match (granted, requested) {
-                    (
-                        FileSystemPermission::Read(granted_pattern),
-                        FileSystemPermission::Read(requested_path),
-                    )
-                    | (
-                        FileSystemPermission::Write(granted_pattern),
-                        FileSystemPermission::Write(requested_path),
-                    )
-                    | (
-                        FileSystemPermission::Delete(granted_pattern),
-                        FileSystemPermission::Delete(requested_path),
-                    )
-                    | (
-                        FileSystemPermission::List(granted_pattern),
-                        FileSystemPermission::List(requested_path),
-                    )
-                    | (
-                        FileSystemPermission::CreateDir(granted_pattern),
-                        FileSystemPermission::CreateDir(requested_path),
-                    ) => {
-                        if granted_pattern.matches(&match requested_path {
-                            PathPattern::Exact(p) => p.clone(),
-                            PathPattern::Prefix(p) => p.clone(),
-                            PathPattern::Glob(_) => PathBuf::new(),
-                            PathPattern::Any => PathBuf::new(),
-                        }) {
-                            return true;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        false
-    }
-
-    /// Check network permissions
-    fn has_network_permission(&self, _requested: &NetworkPermission) -> bool {
-        // Simplified for now
-        false
-    }
-
-    /// Check process permissions
-    fn has_process_permission(&self, _requested: &ProcessPermission) -> bool {
-        // Simplified for now
-        false
-    }
-
-    /// Check environment permissions
-    fn has_environment_permission(&self, _requested: &EnvironmentPermission) -> bool {
-        // Simplified for now
-        false
+        self.permissions.contains(permission)
     }
 
     /// Get all granted permissions
@@ -459,13 +383,13 @@ pub mod presets {
 
     /// Read-write access to a directory
     pub fn read_write(dir: impl Into<PathBuf>) -> PermissionSet {
-        let mut perms = read_only(dir);
-        let path = PathPattern::Prefix(perms.granted().next().unwrap().clone());
-        if let Permission::FileSystem(FileSystemPermission::Read(prefix)) = perms.granted().next().unwrap() {
-            perms.grant(Permission::FileSystem(FileSystemPermission::Write(prefix.clone())));
-            perms.grant(Permission::FileSystem(FileSystemPermission::Delete(prefix.clone())));
-            perms.grant(Permission::FileSystem(FileSystemPermission::CreateDir(prefix.clone())));
-        }
+        let path = PathPattern::Prefix(dir.into());
+        let mut perms = PermissionSet::new();
+        perms.grant(Permission::FileSystem(FileSystemPermission::Read(path.clone())));
+        perms.grant(Permission::FileSystem(FileSystemPermission::List(path.clone())));
+        perms.grant(Permission::FileSystem(FileSystemPermission::Write(path.clone())));
+        perms.grant(Permission::FileSystem(FileSystemPermission::Delete(path.clone())));
+        perms.grant(Permission::FileSystem(FileSystemPermission::CreateDir(path)));
         perms
     }
 
