@@ -13,6 +13,8 @@ pub mod memory;
 pub mod plugin;
 pub mod tool;
 pub mod types;
+#[cfg(test)]
+mod tests;
 
 // Public re-exports
 pub use agent::{Agent, AgentBuilder};
