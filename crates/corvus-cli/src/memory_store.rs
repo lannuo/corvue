@@ -6,6 +6,7 @@ use corvus_memory::tagmemo::TagMemoMemory;
 use corvus_core::memory::{MemoryItem, ContentType, MemorySystem};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -56,22 +57,58 @@ pub struct TagMemoStore {
     tagmemo: Arc<Mutex<TagMemoMemory>>,
     /// Stored memories (id -> StoredMemory)
     memories: Arc<Mutex<HashMap<String, StoredMemory>>>,
+    /// Storage path (if using persistent storage)
+    storage_path: Option<PathBuf>,
 }
 
 impl TagMemoStore {
-    /// Create a new TagMemo store
+    /// Create a new TagMemo store with in-memory storage
     pub fn new(embedding_dim: usize) -> anyhow::Result<Self> {
         let tagmemo = TagMemoMemory::with_in_memory_storage(embedding_dim)?;
 
         Ok(Self {
             tagmemo: Arc::new(Mutex::new(tagmemo)),
             memories: Arc::new(Mutex::new(HashMap::new())),
+            storage_path: None,
         })
     }
 
-    /// Open the default TagMemo store
+    /// Open a TagMemo store with persistent storage
+    pub fn open<P: Into<PathBuf>>(path: P, embedding_dim: usize) -> anyhow::Result<Self> {
+        let path_buf = path.into();
+        let tagmemo = TagMemoMemory::with_storage(embedding_dim, &path_buf)?;
+
+        Ok(Self {
+            tagmemo: Arc::new(Mutex::new(tagmemo)),
+            memories: Arc::new(Mutex::new(HashMap::new())),
+            storage_path: Some(path_buf),
+        })
+    }
+
+    /// Open the default TagMemo store (persistent)
     pub fn open_default() -> anyhow::Result<Self> {
-        Self::new(128)
+        let path = Self::default_storage_path()?;
+        Self::open(path, 128)
+    }
+
+    /// Get the default storage path
+    fn default_storage_path() -> anyhow::Result<PathBuf> {
+        let mut path = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
+        path.push(".corvus");
+        path.push("memory.db");
+        Ok(path)
+    }
+
+    /// Load memories from storage
+    pub async fn load_memories(&self) -> anyhow::Result<()> {
+        let tagmemo = self.tagmemo.lock().await;
+        tagmemo.load_memories_from_storage().await?;
+        Ok(())
+    }
+
+    /// Get the storage path (if using persistent storage)
+    pub fn storage_path(&self) -> Option<&PathBuf> {
+        self.storage_path.as_ref()
     }
 
     /// Add a memory to the store

@@ -3,6 +3,7 @@
 use clap::Parser;
 use console::style;
 use corvus_cli::cache::CachedCompletionModel;
+use corvus_cli::chat_memory::ChatMemory;
 use corvus_cli::cli::{Cli, Commands, ConfigCommands, McpCommands, ModelCommands, SessionCommands, PluginCommands, MemoryCommands};
 use corvus_cli::config::{Config, ConfigWizard, ProviderType};
 use corvus_cli::errors::print_error;
@@ -29,6 +30,7 @@ async fn run_chat_interactive(
     agent: Agent,
     mut storage: SessionStorage,
     session_id: &str,
+    mut chat_memory: Option<ChatMemory>,
 ) -> anyhow::Result<()> {
     let mut rl = Editor::<(), DefaultHistory>::new()?;
 
@@ -56,17 +58,30 @@ async fn run_chat_interactive(
                 let _ = rl.add_history_entry(input);
                 storage.add_message(session_id, "user", input)?;
 
+                // Save user message to memory and inject memories
+                let enhanced_prompt = if let Some(memory) = &mut chat_memory {
+                    memory.save_user_message(input).await?;
+                    memory.inject_memories(input).await?
+                } else {
+                    input.to_string()
+                };
+
                 // Try streaming first, fall back to regular mode
-                match run_with_streaming(&agent, input, &mut storage, session_id).await {
+                match run_with_streaming(&agent, &enhanced_prompt, &mut storage, session_id, &mut chat_memory).await {
                     Ok(_) => {}
                     Err(_) => {
                         // Fall back to non-streaming mode
-                        match agent.run(input).await {
+                        match agent.run(&enhanced_prompt).await {
                             Ok(response) => {
                                 println!("\n{}", style("Corvus:").blue().bold());
                                 format_response(&response);
                                 println!();
                                 storage.add_message(session_id, "assistant", &response)?;
+
+                                // Save assistant response to memory
+                                if let Some(memory) = &mut chat_memory {
+                                    memory.save_assistant_message(&response).await?;
+                                }
                             }
                             Err(e) => print_error(&e.into()),
                         }
@@ -97,6 +112,7 @@ async fn run_with_streaming(
     input: &str,
     storage: &mut SessionStorage,
     session_id: &str,
+    chat_memory: &mut Option<ChatMemory>,
 ) -> anyhow::Result<()> {
     let mut stream = agent.run_stream(input).await?;
     let mut handler = StreamingResponseHandler::new();
@@ -118,6 +134,11 @@ async fn run_with_streaming(
     let full_response = handler.content().to_string();
     if !full_response.is_empty() {
         storage.add_message(session_id, "assistant", &full_response)?;
+
+        // Save assistant response to memory
+        if let Some(memory) = chat_memory {
+            memory.save_assistant_message(&full_response).await?;
+        }
     }
 
     Ok(())
@@ -278,7 +299,7 @@ async fn handle_session_commands(cmd: &SessionCommands) -> anyhow::Result<()> {
             }
             println!();
 
-            run_chat_interactive(agent, storage, &session_id).await?;
+            run_chat_interactive(agent, storage, &session_id, None).await?;
 
             println!("Goodbye!");
         }
@@ -865,6 +886,26 @@ async fn run_chat_mode(
 
     let model_name = args.model.unwrap_or(config.default_model.clone());
 
+    // Set up chat memory if enabled
+    let mut chat_memory = if config.use_memory {
+        match ChatMemory::open_default(config.memory_threshold, config.max_memories) {
+            Ok(mut memory) => {
+                // Load existing memories
+                if let Err(e) = memory.load_memories().await {
+                    println!("Warning: Could not load existing memories: {}", e);
+                }
+                println!("✓ Memory system enabled (threshold: {}, max: {})", config.memory_threshold, config.max_memories);
+                Some(memory)
+            }
+            Err(e) => {
+                println!("Warning: Could not initialize memory system: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     let preamble = "You are Corvus, an intelligent AI assistant. You help with coding tasks and general questions. You have access to these tools: execute_code (run code), file_operations (read/write files), shell_exec (run shell commands), git_operations (git commands), file_search (search for files), http_request (make HTTP requests), and system_info (get system information).";
     let (agent, mcp_tool_count) = build_agent(&config, completion_model, preamble).await?;
 
@@ -882,16 +923,35 @@ async fn run_chat_mode(
         println!("You: {}", prompt);
         storage.add_message(&session.id, "user", &prompt)?;
 
-        match agent.run(&prompt).await {
+        // Save user message to memory and inject memories
+        let enhanced_prompt = if let Some(memory) = &mut chat_memory {
+            memory.save_user_message(&prompt).await?;
+            memory.inject_memories(&prompt).await?
+        } else {
+            prompt.clone()
+        };
+
+        match agent.run(&enhanced_prompt).await {
             Ok(response) => {
                 println!("\nCorvus: {}\n", response);
                 storage.add_message(&session.id, "assistant", &response)?;
+
+                // Save assistant response to memory
+                if let Some(memory) = &mut chat_memory {
+                    memory.save_assistant_message(&response).await?;
+                }
             }
             Err(e) => print_error(&e.into()),
         }
     }
 
-    run_chat_interactive(agent, storage, &session.id).await?;
+    let chat_memory_clone = chat_memory.clone();
+    run_chat_interactive(agent, storage, &session.id, chat_memory).await?;
+
+    if let Some(memory) = chat_memory_clone {
+        let stats = memory.stats();
+        println!("\nMemory stats: {} saved, {} retrieved", stats.total_saved, stats.total_retrieved);
+    }
 
     println!("Goodbye! (Session saved: {})", session.id);
     Ok(())

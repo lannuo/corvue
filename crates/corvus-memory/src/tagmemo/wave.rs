@@ -88,21 +88,21 @@ pub struct WaveQueryResult {
 #[derive(Debug, Clone)]
 pub struct TagMemoWave {
     /// Tag nodes by ID
-    nodes: HashMap<String, TagNode>,
+    pub(crate) nodes: HashMap<String, TagNode>,
     /// Tag name to ID mapping
-    tag_to_id: HashMap<String, String>,
+    pub(crate) tag_to_id: HashMap<String, String>,
     /// Outgoing edges
-    outgoing_edges: HashMap<String, Vec<TagEdge>>,
+    pub(crate) outgoing_edges: HashMap<String, Vec<TagEdge>>,
     /// Incoming edges
-    incoming_edges: HashMap<String, Vec<TagEdge>>,
+    pub(crate) incoming_edges: HashMap<String, Vec<TagEdge>>,
     /// Co-occurrence matrix (sparse)
-    cooccurrence: HashMap<(String, String), u64>,
+    pub(crate) cooccurrence: HashMap<(String, String), u64>,
     /// LIF neuron parameters
     lif_params: LifParams,
     /// Wave propagation parameters
     wave_params: WaveParams,
     /// Next node ID
-    next_node_id: u64,
+    pub(crate) next_node_id: u64,
 }
 
 /// LIF (Leaky Integrate-and-Fire) neuron parameters

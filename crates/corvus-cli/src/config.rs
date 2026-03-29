@@ -142,6 +142,30 @@ impl ConfigWizard {
         std::io::stdin().read_line(&mut input)?;
         config.use_memory = !input.trim().eq_ignore_ascii_case("n");
 
+        if config.use_memory {
+            // Memory threshold
+            print!("\n{} Set memory relevance threshold (0.0-1.0, higher = more strict) [{}]: ", style("?").cyan().bold(), config.memory_threshold);
+            std::io::Write::flush(&mut std::io::stdout())?;
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            if let Ok(t) = input.trim().parse::<f32>() {
+                if (0.0..=1.0).contains(&t) {
+                    config.memory_threshold = t;
+                }
+            }
+
+            // Max memories
+            print!("\n{} Set maximum memories to retrieve per query [{}]: ", style("?").cyan().bold(), config.max_memories);
+            std::io::Write::flush(&mut std::io::stdout())?;
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input)?;
+            if let Ok(n) = input.trim().parse::<usize>() {
+                if n >= 1 {
+                    config.max_memories = n;
+                }
+            }
+        }
+
         // Use cache
         print!("\n{} Enable response caching? [Y/n]: ", style("?").cyan().bold());
         std::io::Write::flush(&mut std::io::stdout())?;
@@ -250,6 +274,12 @@ pub struct Config {
     pub max_iterations: u32,
     /// Whether to use memory
     pub use_memory: bool,
+    /// Memory relevance threshold (0.0-1.0)
+    #[serde(default = "default_memory_threshold")]
+    pub memory_threshold: f32,
+    /// Maximum memories to retrieve per query
+    #[serde(default = "default_max_memories")]
+    pub max_memories: usize,
     /// Whether to enable response caching
     #[serde(default = "default_true")]
     pub use_cache: bool,
@@ -269,6 +299,14 @@ fn default_true() -> bool {
     true
 }
 
+fn default_memory_threshold() -> f32 {
+    0.5
+}
+
+fn default_max_memories() -> usize {
+    10
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -279,6 +317,8 @@ impl Default for Config {
             temperature: 0.7,
             max_iterations: 20,
             use_memory: true,
+            memory_threshold: 0.5,
+            max_memories: 10,
             use_cache: true,
             context_window_size: context_window::DEFAULT_WINDOW_SIZE,
             mcp_servers: Vec::new(),

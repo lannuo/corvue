@@ -32,6 +32,8 @@ pub struct TagMemoMemory {
     wave: Arc<Mutex<TagMemoWave>>,
     /// In-memory storage for memory items
     items: Arc<Mutex<HashMap<String, MemoryItem>>>,
+    /// Persistent storage (optional)
+    storage: Arc<Mutex<Option<TagMemoStorage>>>,
 }
 
 impl TagMemoMemory {
@@ -42,18 +44,109 @@ impl TagMemoMemory {
             pyramid: Arc::new(Mutex::new(ResidualPyramid::new(5, embedding_dim))),
             wave: Arc::new(Mutex::new(TagMemoWave::new())),
             items: Arc::new(Mutex::new(HashMap::new())),
+            storage: Arc::new(Mutex::new(None)),
         }
     }
 
     /// Create a TagMemo system with persistent storage
-    pub fn with_storage<P: AsRef<Path>>(_embedding_dim: usize, _path: P) -> Result<Self> {
-        // For now, just return in-memory version
-        Ok(Self::new(128))
+    pub fn with_storage<P: AsRef<Path>>(embedding_dim: usize, path: P) -> Result<Self> {
+        let mut storage = TagMemoStorage::open(path)?;
+        storage.migrate()?;
+
+        // Load existing data
+        let nodes = storage.load_tag_nodes()?;
+        let edges = storage.load_tag_edges()?;
+        let cooccurrences = storage.load_cooccurrences()?;
+
+        let mut wave = TagMemoWave::new();
+
+        // Restore nodes
+        for node in nodes {
+            let node_id = node.id.clone();
+            let tag = node.tag.clone();
+            wave.nodes.insert(node_id.clone(), node);
+            wave.tag_to_id.insert(tag, node_id);
+        }
+
+        // Restore edges
+        for edge in edges {
+            wave.outgoing_edges.entry(edge.source.clone()).or_default().push(edge.clone());
+            wave.incoming_edges.entry(edge.target.clone()).or_default().push(edge);
+        }
+
+        // Restore co-occurrences
+        wave.cooccurrence = cooccurrences;
+
+        // Update next_node_id
+        if let Some(max_id) = wave.nodes.keys().filter_map(|k| -> Option<u64> {
+            k.strip_prefix("tag_").and_then(|s| s.parse::<u64>().ok())
+        }).max() {
+            wave.next_node_id = max_id + 1;
+        }
+
+        Ok(Self {
+            epa: Arc::new(Mutex::new(EpaModule::new(embedding_dim))),
+            pyramid: Arc::new(Mutex::new(ResidualPyramid::new(5, embedding_dim))),
+            wave: Arc::new(Mutex::new(wave)),
+            items: Arc::new(Mutex::new(HashMap::new())),
+            storage: Arc::new(Mutex::new(Some(storage))),
+        })
     }
 
     /// Create a TagMemo system with in-memory storage
     pub fn with_in_memory_storage(embedding_dim: usize) -> Result<Self> {
         Ok(Self::new(embedding_dim))
+    }
+
+    /// Save current state to persistent storage
+    pub fn save_to_storage(&self) -> Result<()> {
+        let mut storage_opt = self.storage.lock().unwrap();
+        let Some(storage) = storage_opt.as_mut() else {
+            return Ok(());
+        };
+
+        // Save tag nodes
+        let wave = self.wave.lock().unwrap();
+        for node in wave.nodes.values() {
+            storage.save_tag_node(node)?;
+        }
+
+        // Save edges
+        for edges in wave.outgoing_edges.values() {
+            for edge in edges {
+                storage.save_tag_edge(edge)?;
+            }
+        }
+
+        // Save co-occurrences
+        for ((t1, t2), count) in &wave.cooccurrence {
+            storage.save_cooccurrence(t1, t2, *count)?;
+        }
+
+        Ok(())
+    }
+
+    /// Load memories from persistent storage (if available)
+    pub async fn load_memories_from_storage(&self) -> CorvusResult<()> {
+        let mut storage_opt = self.storage.lock().unwrap();
+        let Some(storage) = storage_opt.as_mut() else {
+            return Ok(());
+        };
+
+        let records = storage.get_recent_memories(10000)?;
+        let mut items = self.items.lock().unwrap();
+
+        for record in records {
+            use chrono::TimeZone;
+            let timestamp = chrono::Utc.timestamp_opt(record.created_at, 0).single().unwrap_or(chrono::Utc::now());
+            let mut memory_item = MemoryItem::new(record.content, ContentType::Text)
+                .with_tags(record.tags);
+            memory_item.id = Some(record.id.clone());
+            memory_item.timestamp = timestamp;
+            items.insert(record.id, memory_item);
+        }
+
+        Ok(())
     }
 
     /// Generate a unique ID
@@ -100,18 +193,24 @@ impl TagMemoMemory {
         if let Some(emb) = embedding {
             wave.set_embedding(&tag, emb.to_vec());
         }
+        drop(wave);
+        let _ = self.save_to_storage();
     }
 
     /// Add an association between tags
     pub fn associate_tags(&self, tag1: &str, tag2: &str, weight: f32) {
         let mut wave = self.wave.lock().unwrap();
         wave.add_edge(tag1, tag2, EdgeType::Associative, weight);
+        drop(wave);
+        let _ = self.save_to_storage();
     }
 
     /// Record co-occurrence of tags
     pub fn record_cooccurrence(&self, tags: &[String]) {
         let mut wave = self.wave.lock().unwrap();
         wave.record_cooccurrence(tags, EdgeType::Temporal);
+        drop(wave);
+        let _ = self.save_to_storage();
     }
 
     /// Find similar tags using wave propagation
@@ -162,7 +261,28 @@ impl MemorySystem for TagMemoMemory {
 
         // Store in memory
         let mut items = self.items.lock().unwrap();
-        items.insert(id.clone(), item);
+        items.insert(id.clone(), item.clone());
+        drop(items);
+
+        // Also save to persistent storage if available
+        let mut storage_opt = self.storage.lock().unwrap();
+        if let Some(storage) = storage_opt.as_mut() {
+            let created_at = item.timestamp.timestamp();
+            let record = MemoryRecord {
+                id: id.clone(),
+                content: item.content.clone(),
+                embedding: None,
+                tags: item.tags.clone(),
+                created_at,
+                last_accessed: created_at,
+                access_count: 0,
+                metadata: HashMap::new(),
+            };
+            storage.store_memory(record)?;
+        }
+        drop(storage_opt);
+
+        let _ = self.save_to_storage();
 
         Ok(id)
     }
@@ -315,6 +435,13 @@ impl MemorySystem for TagMemoMemory {
         items
             .remove(item_id)
             .ok_or_else(|| MemoryError::ItemNotFound(item_id.to_string()))?;
+        drop(items);
+
+        // Also delete from persistent storage
+        let mut storage_opt = self.storage.lock().unwrap();
+        if let Some(storage) = storage_opt.as_mut() {
+            storage.delete_memory(item_id)?;
+        }
 
         Ok(())
     }
@@ -333,6 +460,7 @@ impl MemorySystem for TagMemoMemory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_tagmemo_creation() {
@@ -363,6 +491,30 @@ mod tests {
 
         let levels = memory.decompose_embedding(&embedding)?;
         assert_eq!(levels.len(), 5); // 5 levels by default
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_tagmemo_persistence() -> Result<()> {
+        let dir = tempdir()?;
+        let db_path = dir.path().join("test_memory.db");
+
+        // Create and populate memory
+        {
+            let memory = TagMemoMemory::with_storage(128, &db_path)?;
+            memory.add_tag("test".to_string(), true, None);
+            memory.add_tag("example".to_string(), false, None);
+            memory.associate_tags("test", "example", 0.8);
+            memory.save_to_storage()?;
+        }
+
+        // Reopen and verify
+        {
+            let memory = TagMemoMemory::with_storage(128, &db_path)?;
+            let tags = memory.all_tags();
+            assert_eq!(tags.len(), 2);
+        }
 
         Ok(())
     }

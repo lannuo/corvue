@@ -12,10 +12,12 @@ pub mod config_loader;
 pub mod errors;
 pub mod format;
 pub mod memory_store;
+pub mod chat_memory;
 pub mod mcp_bridge;
 pub mod session;
 
 pub use cache::{CachedCompletionModel, ResponseCache};
+pub use chat_memory::{ChatMemory, MemoryStats};
 pub use cli::{Cli, Commands, ConfigCommands, McpCommands, ModelCommands, SessionCommands};
 pub use config::Config;
 pub use errors::{print_error, FriendlyError, HasSuggestions};

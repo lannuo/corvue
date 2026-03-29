@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+use super::wave::{TagNode, TagEdge, EdgeType};
+
 /// A stored memory record
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryRecord {
@@ -86,6 +88,11 @@ impl TagMemoStorage {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
                 is_core BOOLEAN NOT NULL DEFAULT 0,
+                activation REAL NOT NULL DEFAULT 0,
+                membrane_potential REAL NOT NULL DEFAULT -70,
+                last_spike_ms INTEGER,
+                embedding BLOB,
+                metadata BLOB,
                 created_at INTEGER NOT NULL
             )",
             [],
@@ -98,6 +105,21 @@ impl TagMemoStorage {
                 PRIMARY KEY (memory_id, tag_id),
                 FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE,
                 FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS tag_edges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                weight REAL NOT NULL DEFAULT 1,
+                cooccurrence_count INTEGER NOT NULL DEFAULT 1,
+                edge_type TEXT NOT NULL,
+                FOREIGN KEY (source_id) REFERENCES tags(id) ON DELETE CASCADE,
+                FOREIGN KEY (target_id) REFERENCES tags(id) ON DELETE CASCADE,
+                UNIQUE(source_id, target_id)
             )",
             [],
         )?;
@@ -126,11 +148,27 @@ impl TagMemoStorage {
             [],
         )?;
 
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_version (
+                version INTEGER PRIMARY KEY,
+                applied_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
+        // Initialize schema version if not exists
+        conn.execute(
+            "INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?1, ?2)",
+            params![1, Self::now()],
+        )?;
+
         // Indexes
         conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created_at)", [])?;
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)", [])?;
         conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_tags_memory ON memory_tags(memory_id)", [])?;
         conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_tags_tag ON memory_tags(tag_id)", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_edges_source ON tag_edges(source_id)", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_edges_target ON tag_edges(target_id)", [])?;
 
         Ok(())
     }
@@ -398,6 +436,183 @@ impl TagMemoStorage {
     /// Close connection
     pub fn close(self) -> anyhow::Result<()> {
         self.conn.close().map_err(|(_, e)| e)?;
+        Ok(())
+    }
+
+    // ===== TagNode and TagEdge persistence =====
+
+    /// Save a tag node
+    pub fn save_tag_node(&mut self, node: &TagNode) -> anyhow::Result<()> {
+        let embedding_bytes = node.embedding.as_ref().and_then(|e| serde_json::to_vec(e).ok());
+        let metadata_bytes = serde_json::to_vec(&node.metadata)?;
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO tags
+             (id, name, is_core, activation, membrane_potential, last_spike_ms, embedding, metadata, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                node.id,
+                node.tag,
+                node.is_core,
+                node.activation,
+                node.membrane_potential,
+                node.last_spike_ms,
+                embedding_bytes,
+                metadata_bytes,
+                Self::now(),
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    /// Load all tag nodes
+    pub fn load_tag_nodes(&mut self) -> anyhow::Result<Vec<TagNode>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, is_core, activation, membrane_potential, last_spike_ms, embedding, metadata
+             FROM tags",
+        )?;
+
+        let nodes = stmt.query_map([], |row| {
+            let embedding_bytes: Option<Vec<u8>> = row.get(6)?;
+            let metadata_bytes: Vec<u8> = row.get(7)?;
+
+            let embedding = embedding_bytes.and_then(|b| serde_json::from_slice(&b).ok());
+            let metadata: HashMap<String, String> = serde_json::from_slice(&metadata_bytes).unwrap_or_default();
+
+            Ok(TagNode {
+                id: row.get(0)?,
+                tag: row.get(1)?,
+                is_core: row.get(2)?,
+                activation: row.get(3)?,
+                membrane_potential: row.get(4)?,
+                last_spike_ms: row.get(5)?,
+                embedding,
+                metadata,
+            })
+        })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(nodes)
+    }
+
+    /// Save a tag edge
+    pub fn save_tag_edge(&mut self, edge: &TagEdge) -> anyhow::Result<()> {
+        let edge_type_str = match edge.edge_type {
+            EdgeType::Semantic => "semantic",
+            EdgeType::Temporal => "temporal",
+            EdgeType::Hierarchical => "hierarchical",
+            EdgeType::Associative => "associative",
+        };
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO tag_edges
+             (source_id, target_id, weight, cooccurrence_count, edge_type)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                edge.source,
+                edge.target,
+                edge.weight,
+                edge.cooccurrence_count,
+                edge_type_str,
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    /// Load all tag edges
+    pub fn load_tag_edges(&mut self) -> anyhow::Result<Vec<TagEdge>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT source_id, target_id, weight, cooccurrence_count, edge_type
+             FROM tag_edges",
+        )?;
+
+        let edges = stmt.query_map([], |row| {
+            let edge_type_str: String = row.get(4)?;
+            let edge_type = match edge_type_str.as_str() {
+                "semantic" => EdgeType::Semantic,
+                "temporal" => EdgeType::Temporal,
+                "hierarchical" => EdgeType::Hierarchical,
+                _ => EdgeType::Associative,
+            };
+
+            Ok(TagEdge {
+                source: row.get(0)?,
+                target: row.get(1)?,
+                weight: row.get(2)?,
+                cooccurrence_count: row.get(3)?,
+                edge_type,
+            })
+        })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(edges)
+    }
+
+    /// Save co-occurrence matrix entry
+    pub fn save_cooccurrence(&mut self, tag1_id: &str, tag2_id: &str, count: u64) -> anyhow::Result<()> {
+        let (t1, t2) = if tag1_id < tag2_id {
+            (tag1_id, tag2_id)
+        } else {
+            (tag2_id, tag1_id)
+        };
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO tag_cooccurrences (tag1_id, tag2_id, count, last_occurred)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![t1, t2, count, Self::now()],
+        )?;
+
+        Ok(())
+    }
+
+    /// Load all co-occurrences
+    pub fn load_cooccurrences(&mut self) -> anyhow::Result<HashMap<(String, String), u64>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT tag1_id, tag2_id, count FROM tag_cooccurrences",
+        )?;
+
+        let mut cooccurrences = HashMap::new();
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let t1: String = row.get(0)?;
+            let t2: String = row.get(1)?;
+            let count: u64 = row.get(2)?;
+            cooccurrences.insert((t1, t2), count);
+        }
+
+        Ok(cooccurrences)
+    }
+
+    // ===== Database migration =====
+
+    /// Get current schema version
+    pub fn get_schema_version(&mut self) -> anyhow::Result<i32> {
+        let version = self.conn.query_row(
+            "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        ).optional()?;
+
+        Ok(version.unwrap_or(0))
+    }
+
+    /// Migrate database to latest schema
+    pub fn migrate(&mut self) -> anyhow::Result<()> {
+        let current_version = self.get_schema_version()?;
+        let target_version = 1;
+
+        if current_version < target_version {
+            // Add future migrations here
+            self.conn.execute(
+                "UPDATE schema_version SET version = ?1, applied_at = ?2 WHERE version = ?3",
+                params![target_version, Self::now(), current_version],
+            )?;
+        }
+
         Ok(())
     }
 }
