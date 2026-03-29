@@ -752,6 +752,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "corvus-reasoning"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "corvus-core",
+ "corvus-memory",
+ "criterion",
+ "futures",
+ "ndarray",
+ "rand",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "corvus-telemetry"
 version = "0.1.0"
 dependencies = [
