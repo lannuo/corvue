@@ -1,0 +1,33 @@
+[package]
+name = "corvus-memory"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Cognitive memory system for Corvus (TagMemo V7)"
+
+[dependencies]
+corvus-core = { path = "../corvus-core" }
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+futures.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+ndarray.workspace = true
+linfa.workspace = true
+rusqlite = { workspace = true, features = ["bundled"] }
+tokio-rusqlite.workspace = true
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+criterion = "0.5"
+rand = "0.8"
+
+[[bench]]
+name = "vector_index"
+harness = false

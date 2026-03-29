@@ -1,0 +1,46 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+# Note: Cargo.lock is committed for binary projects to ensure reproducible builds
+# Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+dist/
+build/
+out/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Session storage
+corvus_sessions.db
+corvus_sessions.db-shm
+corvus_sessions.db-wal
+
+# Memory storage
+corvus_memory.db
+corvus_memory.db-shm
+corvus_memory.db-wal

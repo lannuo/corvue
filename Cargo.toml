@@ -1,0 +1,71 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/corvus-core",
+    "crates/corvus-providers",
+    "crates/corvus-memory",
+    "crates/corvus-execution",
+    "crates/corvus-protocol",
+    "crates/corvus-cli",
+    "crates/corvus-tools",
+    "crates/corvus-plugin",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+authors = ["Corvus Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/corvus"
+homepage = "https://github.com/example/corvus"
+description = "Corvus AI Agent CLI - Combining the best of Zed, Goose, Codex, Rig, and VCPToolBox"
+
+[workspace.dependencies]
+# Core
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+async-trait = "0.1"
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+futures-util = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+schemars = { version = "0.8", features = ["derive"] }
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+cliclack = "0.3"
+console = "0.16"
+bat = "0.26"
+colorful = "0.2"
+
+# Code execution
+tempfile = "3.10"
+sha2 = "0.10"
+
+# Vector operations
+ndarray = "0.15"
+linfa = "0.7"
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+tokio-rusqlite = "0.6"
+
+# HTTP
+reqwest = { version = "0.12", features = ["json", "stream", "socks"] }
+url = "2.5"
+
+# Time
+chrono = { version = "0.4", features = ["serde", "clock"] }
+
+# Randomness
+rand = "0.8"
+
+# WASM compatibility
+wasm-bindgen = "0.2"

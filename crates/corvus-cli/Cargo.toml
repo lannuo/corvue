@@ -1,0 +1,38 @@
+[package]
+name = "corvus-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CLI interface for Corvus AI Agent"
+
+[dependencies]
+corvus-core = { path = "../corvus-core" }
+corvus-providers = { path = "../corvus-providers" }
+corvus-memory = { path = "../corvus-memory" }
+corvus-execution = { path = "../corvus-execution" }
+corvus-tools = { path = "../corvus-tools" }
+corvus-protocol = { path = "../corvus-protocol" }
+corvus-plugin = { path = "../corvus-plugin" }
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio.workspace = true
+futures.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+clap.workspace = true
+cliclack.workspace = true
+console.workspace = true
+bat.workspace = true
+colorful.workspace = true
+dirs = "5.0"
+open = "5.0"
+chrono = { workspace = true, features = ["serde"] }
+rusqlite = { workspace = true, features = ["bundled"] }
+uuid = { version = "1.0", features = ["v4"] }
+rustyline = "14.0"
+pulldown-cmark = "0.11"
+async-trait = "0.1"

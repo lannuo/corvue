@@ -1,0 +1,17 @@
+[package]
+name = "corvus-execution"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Sandboxed code execution for Corvus"
+
+[dependencies]
+corvus-core = { path = "../corvus-core" }
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+tempfile.workspace = true
+walkdir = "2"
