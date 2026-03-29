@@ -12,6 +12,13 @@ pub mod error;
 pub use mcp::{
     client::McpClient,
     server::{McpServer, McpServerHandler},
+    framework::{
+        McpServerBuilder, SimpleMcpServer, RegisteredTool, RegisteredResource, RegisteredPrompt,
+        ChangeListener, text_content, tool_response_text, tool_response_error,
+    },
+    servers::{
+        FilesystemServer,
+    },
     protocol::{
         CallToolRequest, CallToolResponse,
         InitializeRequest, InitializeResponse,

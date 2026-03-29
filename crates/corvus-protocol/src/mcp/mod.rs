@@ -6,12 +6,18 @@
 pub mod protocol;
 pub mod client;
 pub mod server;
+pub mod framework;
+pub mod servers;
 
 #[cfg(test)]
 mod protocol_tests;
 
 pub use client::McpClient;
-pub use server::McpServer;
+pub use server::{McpServer, McpServerHandler};
+pub use framework::{
+    McpServerBuilder, SimpleMcpServer, RegisteredTool, RegisteredResource, RegisteredPrompt,
+    ChangeListener, text_content, tool_response_text, tool_response_error,
+};
 
 use serde::{Deserialize, Serialize};
 
