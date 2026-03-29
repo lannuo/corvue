@@ -3,7 +3,6 @@
 //! Prevents repeated calls to services that are likely to fail.
 
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
