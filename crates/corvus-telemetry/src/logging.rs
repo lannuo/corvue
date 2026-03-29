@@ -6,8 +6,10 @@ use serde::{Deserialize, Serialize};
 /// Log format
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum LogFormat {
     /// Human-readable text format
+    #[default]
     Text,
     /// JSON format for structured logging
     Json,
@@ -15,11 +17,6 @@ pub enum LogFormat {
     Compact,
 }
 
-impl Default for LogFormat {
-    fn default() -> Self {
-        Self::Text
-    }
-}
 
 /// Logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
