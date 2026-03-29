@@ -185,6 +185,8 @@ pub struct PluginDisableArgs {
 pub enum MemoryCommands {
     /// List memories
     List(MemoryListArgs),
+    /// Add a new memory
+    Add(MemoryAddArgs),
     /// Search memories
     Search(MemorySearchArgs),
     /// Export memories
@@ -193,6 +195,19 @@ pub enum MemoryCommands {
     Import(MemoryImportArgs),
     /// Delete a memory
     Delete(MemoryDeleteArgs),
+}
+
+/// Arguments for adding a memory
+#[derive(Parser, Debug)]
+pub struct MemoryAddArgs {
+    /// Memory content
+    pub content: Vec<String>,
+    /// Tags for this memory (comma-separated or multiple --tag)
+    #[arg(long, short = 't')]
+    pub tag: Vec<String>,
+    /// Content type (text, code, conversation, thought, dream)
+    #[arg(long, short = 'y', default_value = "text")]
+    pub content_type: String,
 }
 
 /// Arguments for listing memories

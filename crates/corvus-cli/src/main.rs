@@ -7,6 +7,7 @@ use corvus_cli::cli::{Cli, Commands, ConfigCommands, McpCommands, ModelCommands,
 use corvus_cli::config::{Config, ConfigWizard, ProviderType};
 use corvus_cli::errors::print_error;
 use corvus_cli::format::{format_response, StreamingResponseHandler};
+use corvus_cli::memory_store::TagMemoStore;
 use corvus_cli::session::{SessionExport, SessionStorage};
 use corvus_core::agent::Agent;
 use corvus_core::completion::CompletionModel;
@@ -678,28 +679,96 @@ async fn handle_plugin_commands(cmd: &PluginCommands) -> anyhow::Result<()> {
 
 /// Handle memory management commands
 async fn handle_memory_commands(cmd: &MemoryCommands) -> anyhow::Result<()> {
+    let store = TagMemoStore::open_default()?;
+
     match cmd {
+        MemoryCommands::Add(args) => {
+            let content = args.content.join(" ");
+            let content_type = match args.content_type.to_lowercase().as_str() {
+                "code" => corvus_core::memory::ContentType::Code,
+                "conversation" => corvus_core::memory::ContentType::Conversation,
+                "thought" => corvus_core::memory::ContentType::Thought,
+                "dream" => corvus_core::memory::ContentType::Dream,
+                _ => corvus_core::memory::ContentType::Text,
+            };
+
+            let id = store.add_memory(content, content_type, args.tag.clone()).await?;
+
+            println!("{} Memory added successfully!", style("✓").green().bold());
+            println!("  ID: {}", style(&id).dim());
+            if !args.tag.is_empty() {
+                println!("  Tags: {}", style(args.tag.join(", ")).yellow());
+            }
+        }
         MemoryCommands::List(args) => {
+            let memories = store.list_memories(args.limit).await;
+
+            if memories.is_empty() {
+                println!("No memories found.");
+                return Ok(());
+            }
+
             println!("{}", style("Recent Memories:").bold());
-            println!("\n  Memory listing coming soon!");
-            println!("  Limit: {}", args.limit);
+            for memory in memories {
+                let date = memory.last_accessed.format("%Y-%m-%d %H:%M");
+                let tags = if memory.tags.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("[{}]", memory.tags.join(", "))
+                };
+
+                println!("\n  {} {}", style(&memory.item.id.as_deref().unwrap_or("")).dim(), style(date).cyan());
+                if !tags.is_empty() {
+                    println!("  {}", style(tags).yellow());
+                }
+                let content_preview = if memory.item.content.len() > 100 {
+                    format!("{}...", &memory.item.content[..100])
+                } else {
+                    memory.item.content.clone()
+                };
+                println!("  {}", content_preview);
+                println!("  Access count: {}", memory.access_count);
+            }
         }
         MemoryCommands::Search(args) => {
+            let results = store.search_memories(&args.query, args.limit).await;
+
+            if results.is_empty() {
+                println!("No memories found for: {}", args.query);
+                return Ok(());
+            }
+
             println!("{}", style("Memory Search Results:").bold());
-            println!("\n  Query: {}", args.query);
-            println!("  Memory search coming soon!");
+            println!("Query: {}\n", args.query);
+
+            for memory in results {
+                let date = memory.last_accessed.format("%Y-%m-%d %H:%M");
+                println!("  {} {}", style(&memory.item.id.as_deref().unwrap_or("")).dim(), style(date).cyan());
+                println!("  {}", memory.item.content);
+                println!();
+            }
         }
         MemoryCommands::Export(args) => {
-            println!("{} Exporting memories to: {}", style("⚠").yellow(), args.output.display());
-            println!("{} Memory export coming soon!", style("⚠").yellow());
+            let memories = store.list_memories(1000).await;
+
+            let content = serde_json::to_string_pretty(&memories)?;
+            std::fs::write(&args.output, content)?;
+
+            println!("{} Memories exported to: {}", style("✓").green().bold(), args.output.display());
         }
         MemoryCommands::Import(args) => {
-            println!("{} Importing memories from: {}", style("⚠").yellow(), args.input.display());
+            let content = std::fs::read_to_string(&args.input)?;
+            let memories: Vec<corvus_cli::memory_store::StoredMemory> = serde_json::from_str(&content)?;
+
+            println!("{} Importing {} memories...", style("⚠").yellow(), memories.len());
             println!("{} Memory import coming soon!", style("⚠").yellow());
         }
         MemoryCommands::Delete(args) => {
-            println!("{} Deleting memory: {}", style("⚠").yellow(), args.memory_id);
-            println!("{} Memory deletion coming soon!", style("⚠").yellow());
+            if store.delete_memory(&args.memory_id).await {
+                println!("{} Memory deleted successfully!", style("✓").green().bold());
+            } else {
+                println!("{} Memory not found: {}", style("✗").red().bold(), args.memory_id);
+            }
         }
     }
 
